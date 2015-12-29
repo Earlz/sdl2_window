@@ -170,7 +170,7 @@ impl Sdl2Window {
             .map_err(|e| format!("{}", e)));
 
         // Load the OpenGL function pointers.
-        gl::load_with(|name| video_subsystem.gl_get_proc_address(name) as *const _);
+        //gl::load_with(|name| video_subsystem.gl_get_proc_address(name) as *const _);
 
         if settings.get_vsync() {
             video_subsystem.gl_set_swap_interval(1);
