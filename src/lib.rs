@@ -6,6 +6,8 @@ extern crate window;
 extern crate input;
 extern crate shader_version;
 extern crate gl;
+extern crate libc;
+extern crate sdl2_sys;
 
 // External crates.
 use window::{
@@ -20,6 +22,9 @@ use window::{
 use input::{ keyboard, Button, MouseButton, Input, Motion, JoystickAxisArgs, JoystickButton };
 
 use std::vec::Vec;
+use libc::c_void;
+use std::ptr;
+use sdl2::get_error;
 
 pub use shader_version::OpenGL;
 
@@ -70,9 +75,22 @@ impl Sdl2Window {
         try!(window.init_joysticks().map_err(|e| e));
         Ok(window)
     }
-
-    /// Creates a window with the supplied SDL Video subsystem.
+    /// Creates a new SDL2 window from the given platform dependent pointer
+    pub fn new_from(settings: WindowSettings, handle: *mut libc::c_void) -> Result<Self, String> {
+        let sdl = try!(sdl2::init().map_err(|e| format!("{}", e)));
+        let video_subsystem = try!(sdl.video()
+            .map_err(|e| format!("{}", e)));
+        let mut window = try!(Self::with_subsystem_handle(video_subsystem, settings, Some(handle)));
+        // Enable joysticks by default.
+        try!(window.init_joysticks().map_err(|e| e));
+        Ok(window)
+    }
+    /// Creates a window with the supplied SDL Video subsytem
     pub fn with_subsystem(video_subsystem: sdl2::VideoSubsystem, settings: WindowSettings) -> Result<Self, String> {
+        Self::with_subsystem_handle(video_subsystem, settings, None)
+    }
+    /// Creates a window with the supplied SDL Video subsystem and raw platform specific handle to make the window from
+    pub fn with_subsystem_handle(video_subsystem: sdl2::VideoSubsystem, settings: WindowSettings, handle: Option<*mut c_void>) -> Result<Self, String> {
         use sdl2::video::GLProfile;
 
         let sdl_context = video_subsystem.sdl();
@@ -115,8 +133,21 @@ impl Sdl2Window {
         } else {
             window_builder
         };
-
-        let window = window_builder.build();
+        let window = match handle{
+            Some(h) => {
+                unsafe{
+                    let raw = sdl2_sys::video::SDL_CreateWindowFrom(h);
+                    if raw == ptr::null_mut() {
+                       Err(get_error())
+                   } else {
+                       Ok(sdl2::video::Window::from_ll(video_subsystem.clone(), raw))
+                   }
+                }
+            }
+            None => {
+                window_builder.build()
+            }
+        };
 
         let window = match window {
             Ok(w) => w,
